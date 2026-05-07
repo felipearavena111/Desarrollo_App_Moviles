@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:google_sign_in/google_sign_in.dart'; 
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'firebase_options.dart';
 
@@ -22,7 +22,7 @@ class MiAplicacion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'App UA',
+      title: 'UA Asistencia Alumno',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE53935)), // Rojo UA
@@ -43,7 +43,7 @@ class MiAplicacion extends StatelessWidget {
 }
 
 // =========================================================================
-// 1. PANTALLA DE AUTENTICACIÓN (CON TODAS LAS CORRECCIONES DEL PROFESOR)
+// 1. PANTALLA DE AUTENTICACIÓN
 // =========================================================================
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -56,7 +56,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final _auth = FirebaseAuth.instance;
   bool isLogin = true; 
 
-  // Controladores de visibilidad de contraseña
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
@@ -80,13 +79,11 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  // Validación de contraseña robusta
   bool isPasswordSecure(String password) {
     final regex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$');
     return regex.hasMatch(password);
   }
 
-  // VENTANA EMERGENTE PERSONALIZADA (Exigencia del Profesor)
   void mostrarAlertaEmergente({required String titulo, required String mensaje, VoidCallback? onAceptar}) {
     showDialog(
       context: context,
@@ -126,8 +123,6 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-
-  // REGISTRO DE USUARIOS (Corregido para que la alerta no se cierre sola)
   Future<void> registrarUsuario() async {
     final email = emailController.text.trim();
     final password = passwordController.text;
@@ -161,13 +156,11 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     try {
-      // 1. Crear el perfil de autenticación en Firebase
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email, 
         password: password,
       );
       
-      // 2. Guardar datos iniciales en la base de datos
       if (userCredential.user != null) {
         DatabaseReference ref = FirebaseDatabase.instance.ref("usuarios/${userCredential.user!.uid}");
         await ref.set({
@@ -179,13 +172,10 @@ class _AuthScreenState extends State<AuthScreen> {
         await userCredential.user!.sendEmailVerification();
       }
 
-      // 3. Mostramos la alerta PRIMERO. 
-      // El cierre de sesión y la limpieza ocurren SOLO cuando el usuario presiona "Confirmar y Aceptar"
       mostrarAlertaEmergente(
         titulo: '¡Registro Exitoso!',
         mensaje: 'Tu cuenta ha sido creada. Se ha enviado un correo de verificación a tu casilla de Gmail. Por favor, verifícalo para iniciar sesión.',
         onAceptar: () async {
-          // Recién aquí cerramos la sesión y limpiamos la pantalla
           await _auth.signOut();
           if (mounted) {
             setState(() {
@@ -211,7 +201,6 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  // INICIO DE SESIÓN (Optimizado para la presentación - Versión única y sin errores)
   Future<void> iniciarSesion() async {
     final email = emailController.text.trim();
     
@@ -220,7 +209,6 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    // CAMBIO: Validación adaptada a @gmail.com
     if (!email.endsWith('@gmail.com')) {
       mostrarAlertaEmergente(
         titulo: 'Acceso Denegado', 
@@ -230,13 +218,11 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     try {
-      // Iniciamos sesión directamente
       await _auth.signInWithEmailAndPassword(
         email: email,
         password: passwordController.text,
       );
 
-      // Mensaje rápido de éxito antes de pasar a la pantalla de Inicio
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -257,10 +243,8 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  // RECUPERAR CONTRASEÑA
   Future<void> recuperarContrasena() async {
     final email = emailController.text.trim();
-    // CAMBIO: Validación adaptada a @gmail.com
     if (email.isEmpty || !email.endsWith('@gmail.com')) {
       mostrarAlertaEmergente(
         titulo: 'Correo Requerido', 
@@ -279,15 +263,19 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-// INICIAR SESIÓN / REGISTRAR CON GOOGLE (AHORA SÍ, CON EL IMPORT CORREGIDO)
-  Future<void> iniciarSesionGoogle() async {
+Future<void> iniciarSesionGoogle() async {
     try {
-      final googleSignIn = GoogleSignIn();
-      final googleUser = await googleSignIn.signIn();
+      final GoogleSignIn googleSignIn = GoogleSignIn();
       
-      if (googleUser == null) return; // El usuario canceló el flujo
+      // 1. Limpiamos cualquier sesión previa para obligar a que aparezca el selector
+      await googleSignIn.signOut();
+      
+      // 2. Iniciamos el proceso de login
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      
+      if (googleUser == null) return; // El usuario canceló
 
-      // Validación adaptada a @gmail.com
+      // 3. Validación de dominio @gmail.com
       if (!googleUser.email.endsWith('@gmail.com')) {
         await googleSignIn.signOut();
         mostrarAlertaEmergente(
@@ -297,16 +285,16 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
 
-      final googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-      final credential = GoogleAuthProvider.credential(
+      final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
       
       UserCredential userCredential = await _auth.signInWithCredential(credential);
       
-      // Si es su primer inicio, guardamos el nombre en la base de datos
+      // 4. Registro inicial en la base de datos si es nuevo (Avance 2)
       if (userCredential.user != null) {
         DatabaseReference ref = FirebaseDatabase.instance.ref("usuarios/${userCredential.user!.uid}");
         final snapshot = await ref.child("full_name").get();
@@ -319,9 +307,10 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     } catch (e) {
+      // Si el error persiste, es probable que falte habilitar Google en la consola de Firebase
       mostrarAlertaEmergente(
         titulo: 'Error Google', 
-        mensaje: 'No se pudo conectar con Google. Verifica que el botón de Google esté habilitado en Firebase.'
+        mensaje: 'No se pudo conectar. Asegúrate de tener conexión a internet y de haber habilitado Google en Authentication de Firebase.'
       );
     }
   }
@@ -341,12 +330,12 @@ class _AuthScreenState extends State<AuthScreen> {
                   color: const Color(0xFFE53935),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.lock, color: Colors.white, size: 40),
+                child: const Icon(Icons.co_present_rounded, color: Colors.white, size: 40),
               ),
               const SizedBox(height: 20),
               
               Text(
-                isLogin ? 'Login UA' : 'Registrar Usuario UA',
+                isLogin ? 'Portal Estudiante UA' : 'Registrar Estudiante',
                 style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -365,7 +354,6 @@ class _AuthScreenState extends State<AuthScreen> {
               
               TextField(
                 controller: emailController,
-                // CAMBIO: HintText modificado a @gmail.com
                 decoration: _inputDecoration('Correo electrónico @gmail.com', Icons.email),
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -476,9 +464,9 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// ==========================================
-// 2. ESTRUCTURA PRINCIPAL (NAVIGATION BAR M3)
-// ==========================================
+// =========================================================================
+// 2. ESTRUCTURA PRINCIPAL (3 PANTALLAS EXIGIDAS EN AVANCE 2)
+// =========================================================================
 class HomeNavegacion extends StatefulWidget {
   const HomeNavegacion({super.key});
 
@@ -490,8 +478,9 @@ class _HomeNavegacionState extends State<HomeNavegacion> {
   int currentPageIndex = 0;
 
   final List<Widget> _pantallas = [
-    const PantallaInicio(), 
-    const PantallaPerfil(), 
+    const PantallaSolicitudesCRUD(), // 1. Módulo Principal CRUD de Solicitudes
+    const PantallaHistorialAsistencia(), // 2. Pantalla Informativa / Historial
+    const PantallaPerfil(), // 3. Pantalla de Perfil de Estudiante
   ];
 
   @override
@@ -507,14 +496,19 @@ class _HomeNavegacionState extends State<HomeNavegacion> {
         selectedIndex: currentPageIndex,
         destinations: const <Widget>[
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Inicio',
+            icon: Icon(Icons.edit_document),
+            selectedIcon: Icon(Icons.assignment_turned_in),
+            label: 'Justificar',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Mi Historial',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
-            label: 'Perfil',
+            label: 'Mi Perfil',
           ),
         ],
       ),
@@ -522,28 +516,339 @@ class _HomeNavegacionState extends State<HomeNavegacion> {
   }
 }
 
-// ==========================================
-// 3. PANTALLA DE INICIO 
-// ==========================================
-class PantallaInicio extends StatelessWidget {
-  const PantallaInicio({super.key});
+// =========================================================================
+// 3. MÓDULO PRINCIPAL: CRUD COMPLETO DE JUSTIFICACIONES (AVANCE 2)
+// =========================================================================
+class PantallaSolicitudesCRUD extends StatefulWidget {
+  const PantallaSolicitudesCRUD({super.key});
+
+  @override
+  State<PantallaSolicitudesCRUD> createState() => _PantallaSolicitudesCRUDState();
+}
+
+class _PantallaSolicitudesCRUDState extends State<PantallaSolicitudesCRUD> {
+  final _auth = FirebaseAuth.instance;
+  final _dbRef = FirebaseDatabase.instance.ref();
+  
+  final _asignaturaController = TextEditingController();
+  final _motivoController = TextEditingController();
+  String _fechaSeleccionada = "Hoy"; 
+
+  List<Map<dynamic, dynamic>> _solicitudesList = [];
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _escucharSolicitudes();
+  }
+
+  // LEER (R): Lista Dinámica en tiempo real filtrada por alumno autenticado
+void _escucharSolicitudes() {
+    final user = _auth.currentUser;
+    if (user != null) {
+      _dbRef.child("solicitudes/${user.uid}").onValue.listen((event) {
+        final List<Map<dynamic, dynamic>> temporalList = [];
+        final data = event.snapshot.value as Map<dynamic, dynamic>?;
+
+        if (data != null) {
+          data.forEach((key, value) {
+            temporalList.add({
+              'id': key,
+              'asignatura': value['asignatura'],
+              'motivo': value['motivo'],
+              'fecha': value['fecha'],
+              'estado': value['estado'] ?? 'Pendiente',
+            });
+          });
+        }
+
+        if (mounted) {
+          setState(() {
+            // Reemplazamos la lista por completo con los datos del usuario actual
+            _solicitudesList = temporalList; 
+            _cargando = false;
+          });
+        }
+      });
+    } else {
+      // Si por algún motivo el usuario es nulo, vaciamos la lista de inmediato
+      if (mounted) {
+        setState(() {
+          _solicitudesList = [];
+          _cargando = false;
+        });
+      }
+    }
+  }
+
+  // CREAR (C) / ACTUALIZAR (U): Formulario para enviar o editar justificación
+  void _mostrarFormulario({String? id, String? asignaturaOriginal, String? motivoOriginal, String? fechaOriginal}) {
+    if (id != null) {
+      _asignaturaController.text = asignaturaOriginal ?? "";
+      _motivoController.text = motivoOriginal ?? "";
+      _fechaSeleccionada = fechaOriginal ?? "Hoy";
+    } else {
+      _asignaturaController.clear();
+      _motivoController.clear();
+      _fechaSeleccionada = "Hoy";
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(id == null ? 'Nueva Justificación' : 'Editar Justificación', style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _asignaturaController,
+                      decoration: const InputDecoration(labelText: 'Asignatura (ej: Cálculo)'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _motivoController,
+                      decoration: const InputDecoration(labelText: 'Motivo (ej: Falla de tarjeta RFID)'),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 20),
+                    DropdownButtonFormField<String>(
+                      value: _fechaSeleccionada,
+                      decoration: const InputDecoration(labelText: 'Fecha de la Inasistencia'),
+                      items: <String>['Hoy', 'Ayer', 'Clase Anterior'].map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (newValue) {
+                        setDialogState(() {
+                          _fechaSeleccionada = newValue!;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
+                  onPressed: () => _guardarJustificacion(id: id),
+                  child: const Text('Enviar', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // VALIDACIONES antes de guardar
+  void _guardarJustificacion({String? id}) async {
+    final asignatura = _asignaturaController.text.trim();
+    final motivo = _motivoController.text.trim();
+    final user = _auth.currentUser;
+
+    if (user == null) return;
+
+    if (asignatura.isEmpty || motivo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, completa la materia y el motivo antes de enviar.')),
+      );
+      return;
+    }
+
+    try {
+      if (id == null) {
+        // CREAR en Firebase
+        await _dbRef.child("solicitudes/${user.uid}").push().set({
+          'asignatura': asignatura,
+          'motivo': motivo,
+          'fecha': _fechaSeleccionada,
+          'estado': 'Pendiente',
+        });
+        _mostrarSnackBar('¡Solicitud de justificación enviada!');
+      } else {
+        // ACTUALIZAR en Firebase
+        await _dbRef.child("solicitudes/${user.uid}/$id").update({
+          'asignatura': asignatura,
+          'motivo': motivo,
+          'fecha': _fechaSeleccionada,
+        });
+        _mostrarSnackBar('¡Solicitud modificada con éxito!');
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      _mostrarSnackBar('Error al guardar: $e');
+    }
+  }
+
+  // ELIMINAR (D) con diálogo de confirmación explícita
+  void _confirmarEliminar(String id) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Cancelar Solicitud', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text('¿Estás seguro de que deseas retirar esta solicitud de justificación?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Volver', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                final user = _auth.currentUser;
+                if (user != null) {
+                  await _dbRef.child("solicitudes/${user.uid}/$id").remove();
+                  _mostrarSnackBar('Solicitud eliminada.');
+                }
+                if (mounted) Navigator.pop(context);
+              },
+              child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _mostrarSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inicio', style: TextStyle(color: Colors.white)),
+        title: const Text('Justificar Asistencia', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFFE53935),
       ),
-      body: const Center(
-        child: Text('Pantalla principal de la aplicación.'),
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE53935))) // Estado de carga
+          : _solicitudesList.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.edit_document, size: 80, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No tienes solicitudes pendientes de revisión.\n¡Usa el botón + si tuviste problemas de asistencia!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder( // Lista Dinámica
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _solicitudesList.length,
+                  itemBuilder: (context, index) {
+                    final item = _solicitudesList[index];
+                    return Card(
+                      elevation: 3,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      child: ListTile(
+                        leading: const CircleAvatar(
+                          backgroundColor: Color(0xFFE53935),
+                          foregroundColor: Colors.white,
+                          child: Icon(Icons.assignment_late),
+                        ),
+                        title: Text(
+                          item['asignatura'],
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        subtitle: Text(
+                          'Motivo: ${item['motivo']}\nFecha: ${item['fecha']}   |   Estado: ${item['estado']}',
+                          style: TextStyle(color: Colors.grey.shade700),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                              onPressed: () => _mostrarFormulario(
+                                id: item['id'],
+                                asignaturaOriginal: item['asignatura'],
+                                motivoOriginal: item['motivo'],
+                                fechaOriginal: item['fecha'],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.redAccent),
+                              onPressed: () => _confirmarEliminar(item['id']),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _mostrarFormulario(),
+        backgroundColor: const Color(0xFFE53935),
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
       ),
     );
   }
 }
 
 // =========================================================================
-// 4. PANTALLA DE PERFIL (CON DATOS DINÁMICOS Y FOTO EN BASE64)
+// 4. PANTALLA SECUNDARIA: HISTORIAL DE ASISTENCIA
+// =========================================================================
+class PantallaHistorialAsistencia extends StatelessWidget {
+  const PantallaHistorialAsistencia({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mi Historial de Asistencia', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFFE53935),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.history_toggle_off, size: 80, color: Color(0xFFE53935)),
+            const SizedBox(height: 24),
+            const Text(
+              'Bitácora de Clases',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Aquí podrás visualizar todas tus asistencias registradas exitosamente por el lector de tarjetas RFID de la universidad.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// =========================================================================
+// 5. PANTALLA DE PERFIL (CON FOTO EN BASE64)
 // =========================================================================
 class PantallaPerfil extends StatefulWidget {
   const PantallaPerfil({super.key});
@@ -555,7 +860,7 @@ class PantallaPerfil extends StatefulWidget {
 class _PantallaPerfilState extends State<PantallaPerfil> {
   final nombreController = TextEditingController();
   String nombreMostrado = "Cargando...";
-  String photoBase64 = ""; // Almacenará la foto en Base64
+  String photoBase64 = ""; 
   bool procesandoFoto = false;
 
   @override
@@ -564,7 +869,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
     _cargarDatosDePerfil();
   }
 
-  // CARGAR DATOS
   Future<void> _cargarDatosDePerfil() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -581,16 +885,11 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
           });
         }
       } catch (e) {
-        if (mounted) {
-          setState(() {
-            nombreMostrado = "Error al cargar datos";
-          });
-        }
+        if (mounted) setState(() { nombreMostrado = "Error al cargar"; });
       }
     }
   }
 
-  // SELECCIONAR, PROCESAR Y GUARDAR FOTO EN BASE64
   Future<void> _seleccionarYGuardarFoto() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -598,130 +897,47 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
     final picker = ImagePicker();
     final XFile? imagenSeleccionada = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 35, // Comprime la imagen para que quepa en la base de datos sin problemas
+      imageQuality: 35, 
     );
 
     if (imagenSeleccionada != null) {
-      setState(() {
-        procesandoFoto = true;
-      });
-
+      setState(() { procesandoFoto = true; });
       try {
-        File archivo = File(imagenSeleccionada.path);
-        List<int> imageBytes = await archivo.readAsBytes();
-        String base64Image = base64Encode(imageBytes); // Convierte a Base64
-
-        DatabaseReference dbRef = FirebaseDatabase.instance.ref("usuarios/${user.uid}");
-        await dbRef.update({
-          'photo_url': base64Image,
-        });
+        String base64Image = base64Encode(await File(imagenSeleccionada.path).readAsBytes());
+        await FirebaseDatabase.instance.ref("usuarios/${user.uid}").update({'photo_url': base64Image});
 
         if (mounted) {
           setState(() {
             photoBase64 = base64Image;
             procesandoFoto = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Foto de perfil actualizada con éxito.')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto actualizada.')));
         }
       } catch (e) {
-        setState(() {
-          procesandoFoto = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al procesar la imagen: $e')),
-        );
+        setState(() { procesandoFoto = false; });
       }
     }
-  }
-
-  // VENTANA EMERGENTE DE CONFIRMACIÓN PARA CERRAR SESIÓN (Punto Crítico)
-  void mostrarConfirmacionCerrarSesion() {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Confirmar Salida', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text('¿Estás seguro de que deseas cerrar sesión en la aplicación?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
-              onPressed: () {
-                Navigator.of(context).pop();
-                cerrarSesion();
-              },
-              child: const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // GUARDAR PERFIL
-  Future<void> guardarPerfil() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final nuevoNombre = nombreController.text.trim();
-      if (nuevoNombre.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El nombre no puede quedar vacío.')),
-        );
-        return;
-      }
-      try {
-        DatabaseReference ref = FirebaseDatabase.instance.ref("usuarios/${user.uid}");
-        await ref.update({
-          'full_name': nuevoNombre,
-        });
-        
-        if (mounted) {
-          setState(() {
-            nombreMostrado = nuevoNombre;
-          });
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Perfil actualizado correctamente')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al guardar: $e')),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> cerrarSesion() async {
-    await FirebaseAuth.instance.signOut();
   }
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final userEmail = user?.email ?? 'Sin correo';
-    final userId = user?.uid ?? 'Sin ID';
 
-    // Intenta decodificar la foto si existe en formato Base64
+    // Lógica inteligente para mostrar la imagen sin errores
     ImageProvider? imagenDePerfil;
+    
     if (photoBase64.isNotEmpty) {
-      try {
-        if (photoBase64.startsWith('http')) {
-          imagenDePerfil = NetworkImage(photoBase64); // Por si viene de Google
-        } else {
-          imagenDePerfil = MemoryImage(base64Decode(photoBase64)); // Decodifica Base64
+      if (photoBase64.startsWith('http')) {
+        // Si la ruta comienza con http, es una URL directa (Google)
+        imagenDePerfil = NetworkImage(photoBase64);
+      } else {
+        // Si no, intentamos decodificar el Base64 (Galería)
+        try {
+          imagenDePerfil = MemoryImage(base64Decode(photoBase64));
+        } catch (e) {
+          // Si el base64 está corrupto o mal formateado, volvemos al icono por defecto
+          imagenDePerfil = null;
         }
-      } catch (_) {
-        imagenDePerfil = null;
       }
     }
 
@@ -729,13 +945,13 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
       appBar: AppBar(
         title: const Text('Mi Perfil', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFFE53935),
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // AVATAR CON FOTO EN BASE64
             Center(
               child: Stack(
                 children: [
@@ -748,9 +964,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                         : null,
                   ),
                   if (procesandoFoto)
-                    const Positioned.fill(
-                      child: CircularProgressIndicator(color: Color(0xFFE53935)),
-                    ),
+                    const Positioned.fill(child: CircularProgressIndicator(color: Color(0xFFE53935))),
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -779,10 +993,10 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('ID de Estudiante:', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                  Text(userId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text(user?.uid ?? '---', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 10),
                   Text('Correo Institucional:', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                  Text(userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(user?.email ?? '---', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 10),
                   Text('Nombre Registrado:', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                   Text(nombreMostrado, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFFE53935))),
@@ -805,7 +1019,11 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
             const SizedBox(height: 16),
             
             ElevatedButton(
-              onPressed: guardarPerfil,
+              onPressed: () async {
+                await FirebaseDatabase.instance.ref("usuarios/${user!.uid}").update({'full_name': nombreController.text});
+                setState(() { nombreMostrado = nombreController.text; });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guardado con éxito.')));
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blueAccent,
                 foregroundColor: Colors.white,
@@ -816,7 +1034,10 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
             
             const SizedBox(height: 40), 
             OutlinedButton.icon(
-              onPressed: mostrarConfirmacionCerrarSesion, // Alerta emergente de confirmación obligatoria
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                await GoogleSignIn().signOut();
+              },
               icon: const Icon(Icons.logout, color: Colors.red),
               label: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
               style: OutlinedButton.styleFrom(
@@ -824,7 +1045,6 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                 side: const BorderSide(color: Colors.red),
               ),
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
