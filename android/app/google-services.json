@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "663058938656",
+    "firebase_url": "https://avances-login-default-rtdb.firebaseio.com",
+    "project_id": "avances-login",
+    "storage_bucket": "avances-login.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:663058938656:android:b2a55ec0f618d30a0e3545",
+        "android_client_info": {
+          "package_name": "com.example.avances"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "663058938656-v5n2sn2dht7slrq67ekjlciagkeb5vu9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.avances",
+            "certificate_hash": "aeff2ea66330c96054bd07f6e6071b2560fe10d1"
+          }
+        },
+        {
+          "client_id": "663058938656-3us29m794uh4ft2d58jgdgau2jgv8fsf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxq6EhqQARYdtY3LMyXC5b0OTyEPSIJwU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "663058938656-3us29m794uh4ft2d58jgdgau2jgv8fsf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "663058938656-epfhmf0h4o270vqm0snqlecla64j6ifk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.avances"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
